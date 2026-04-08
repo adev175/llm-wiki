@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p c:/Users/nhata/PycharmProjects/llm-wiki/mcp_server)",
+      "Bash(mkdir -p c:/Users/nhata/PycharmProjects/llm-wiki/vault/papers)",
+      "Bash(python -c ':*)",
+      "Bash(py -3 -c \"import ast; ast.parse\\(open\\('mcp_server/server.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('mcp_server/server.py'\\).read\\(\\)\\); print\\('Syntax OK'\\)\")"
+    ]
+  }
+}

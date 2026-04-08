@@ -14,6 +14,8 @@ vault/
 │   ├── _index.md          # Auto-generated catalog
 │   ├── _lint-report.md    # Auto-generated health check
 │   └── *.md               # Knowledge pages
+├── papers/                # Arxiv papers fetched via arxiv_fetch_paper
+│   └── paper-<arxiv-id>.md
 └── log.md                 # Append-only activity log
 ```
 
@@ -118,7 +120,35 @@ Khi user hỏi câu hỏi:
 
 **Threshold để capture:** Nếu bạn phải dùng >3 câu để trả lời, và câu trả lời đó có thể áp dụng lại sau này → file it.
 
-### 4. LINT — Dọn dẹp định kỳ
+### 4. ARXIV RESEARCH — Tìm papers liên quan
+
+Khi user hỏi về topic và muốn tìm papers:
+
+```
+1. arxiv_search(topic, max_results=5) → xem danh sách papers
+2. Với paper quan trọng: arxiv_fetch_paper(arxiv_id, save=True)
+   → tự động lưu vào vault/papers/paper-<id>.md
+3. wiki_search(topic) → kiểm tra wiki có page liên quan chưa
+4. Nếu paper có concept mới → wiki_write("concept-...") với link [[paper-...]]
+```
+
+**Slug cho papers:** `paper-<arxiv-id>` — ví dụ `paper-2401-12345`
+**Tags cho papers:** `["source", "paper", "<category>"]`
+
+### 5. KNOWLEDGE AUTO-SEARCH — Tự động tìm và lưu kiến thức
+
+Khi user đề cập topic mới chưa có trong wiki:
+
+```
+1. knowledge_search(topic, save_if_useful=True)
+   → Tự search Arxiv, tổng hợp kết quả
+   → Nếu content > 200 chars → auto-save vào wiki/log-<date>-<topic>.md
+2. Không cần user yêu cầu — chạy tự động khi detect topic mới
+```
+
+**Threshold tự động trigger:** User nhắc đến topic mà `wiki_search` trả về 0 kết quả.
+
+### 6. LINT — Dọn dẹp định kỳ
 
 Chạy khi user yêu cầu hoặc sau mỗi 10 lần ingest:
 
@@ -183,6 +213,9 @@ Khi tạo page mới về trading:
 | `wiki_rebuild_index` | Sau mỗi batch ingest |
 | `wiki_lint` | Health check định kỳ |
 | `wiki_log` | Xem lịch sử hoạt động |
+| `arxiv_search` | Tìm papers Arxiv theo query |
+| `arxiv_fetch_paper` | Lấy full metadata + save vào `papers/` |
+| `knowledge_search` | Auto-search Arxiv, validate, save wiki nếu useful |
 
 ---
 
