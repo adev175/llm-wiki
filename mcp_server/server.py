@@ -16,10 +16,19 @@ import httpx
 import yaml
 from mcp.server.fastmcp import FastMCP
 
+# Load .env if present (python-dotenv optional)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+except ImportError:
+    pass
+
 # ---------------------------------------------------------------------------
 # Config — resolve vault relative to this file's parent
 # ---------------------------------------------------------------------------
-VAULT_ROOT = Path(__file__).parent.parent / "vault"
+import os
+_vault_override = os.environ.get("VAULT_ROOT")
+VAULT_ROOT = Path(_vault_override) if _vault_override else Path(__file__).parent.parent / "vault"
 WIKI_DIR = VAULT_ROOT / "wiki"
 RAW_DIR = VAULT_ROOT / "raw"
 PAPERS_DIR = VAULT_ROOT / "papers"

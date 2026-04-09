@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Obsidian app settings
+vault/.obsidian/
+
+# Keep vault folder structure but ignore all content
+vault/raw/*
+vault/wiki/*
+vault/papers/*
+vault/log.md
+!vault/raw/.gitkeep
+!vault/wiki/.gitkeep
+!vault/papers/.gitkeep
+
+# Claude Code local settings (machine-specific, keep settings.json for shared rules)
+.claude/settings.local.json
+
+# Vault content — knowledge data, not code
+vault/raw/
+vault/wiki/
+vault/papers/
+vault/log.md
