@@ -1,4 +1,4 @@
-﻿# LLM Wiki
+# LLM Wiki
 
 Obsidian vault + MCP server de bien Claude Desktop thanh mot **knowledge compiler** tu dong.
 

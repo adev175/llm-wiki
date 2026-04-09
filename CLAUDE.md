@@ -4,6 +4,53 @@ Bạn là **Wiki Compiler Agent**. Nhiệm vụ của bạn là xây dựng, mai
 
 ---
 
+## Stack Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Claude Agent                      │
+│  reads CLAUDE.md ──→ biết khi nào dùng gì          │
+└──────┬──────────────────────────┬───────────────────┘
+       │                          │
+       ▼                          ▼
+┌──────────────┐        ┌──────────────────────┐
+│  MCP server  │        │  kepano/obsidian-    │
+│  (server.py) │        │  skills (SKILL.md)   │
+│              │        │                      │
+│ wiki_write   │        │ obsidian-markdown    │ ← OFM syntax
+│ wiki_update  │        │ obsidian-cli         │ ← backlinks, search live
+│ wiki_search  │        │ defuddle             │ ← web URL → clean markdown
+│ wiki_lint    │        │ obsidian-bases       │ ← database views
+│ arxiv_*      │        │ obsidian-canvas      │ ← knowledge graph
+│ knowledge_*  │        └──────────┬───────────┘
+└──────┬───────┘                   │
+       └───────────────┬───────────┘
+                       ▼
+         ┌─────────────────────────┐
+         │      Obsidian Vault     │
+         │  raw/    wiki/  papers/ │
+         └─────────────────────────┘
+                       ↑ UI
+                 Obsidian App
+          (Graph View, Dataview, Bases)
+```
+
+**Phân công layer rõ ràng:**
+
+| Layer | Công cụ | Cần Obsidian mở? |
+|-------|---------|-----------------|
+| Wiki logic (ingest, write, lint, index) | `server.py` MCP tools | Không |
+| Live Obsidian interaction (backlinks, properties, daily) | `obsidian-cli` skill | Có |
+| Web scraping sạch từ URL | `defuddle` skill | Không |
+| Viết OFM đúng syntax (callouts, embeds, Dataview) | `obsidian-markdown` skill | Không |
+
+**Setup kepano/obsidian-skills (1 lần):**
+```bash
+git clone https://github.com/kepano/obsidian-skills.git ~/.claude/skills/obsidian-skills
+```
+
+---
+
 ## Vault Structure
 
 ```
@@ -65,7 +112,7 @@ updated: "2026-04-08 14:30"
 
 ## Workflows
 
-### 1. INGEST — Thêm nguồn mới
+### 1a. INGEST — Thêm nguồn mới (paste text)
 
 Khi user paste 1 article / paper / notes:
 
@@ -81,6 +128,22 @@ Khi user paste 1 article / paper / notes:
 6. wiki_write("source-<slug>", ...) → tạo source summary page
 7. wiki_rebuild_index()
 ```
+
+### 1b. INGEST — Thêm nguồn từ URL (dùng defuddle)
+
+Khi user cung cấp URL (blog post, article, docs page):
+
+```
+1. /defuddle <url> → extract clean markdown, loại bỏ navigation/ads/clutter
+2. Lấy content trả về → chạy tiếp workflow 1a từ bước 1
+```
+
+**Khi dùng defuddle thay vì paste tay:**
+- URL trỏ đến web page (không phải PDF)
+- Content có nhiều boilerplate (header, footer, sidebar)
+- User nói "clip this", "ingest from url", "lấy bài này"
+
+**Không dùng defuddle cho:** Arxiv papers (dùng `arxiv_fetch_paper`), GitHub repos, PDF links.
 
 **Số lượng pages mỗi source:** 3–8 pages. Không cần cover hết, chỉ lấy những gì quan trọng và distinct.
 
@@ -148,7 +211,41 @@ Khi user đề cập topic mới chưa có trong wiki:
 
 **Threshold tự động trigger:** User nhắc đến topic mà `wiki_search` trả về 0 kết quả.
 
-### 6. LINT — Dọn dẹp định kỳ
+### 6. OBSIDIAN LIVE — Tương tác trực tiếp với Obsidian đang chạy
+
+Chỉ dùng khi Obsidian app đang mở. Dùng `obsidian-cli` skill (kepano):
+
+```
+Backlinks query:
+  /obsidian-cli backlinks [[concept-momentum-trading]]
+  → Xem tất cả pages link đến page này
+
+Daily note append:
+  /obsidian-cli daily:append "- Insight về X từ conversation hôm nay"
+  → Thêm vào daily note mà không cần mở file
+
+Property update:
+  /obsidian-cli property:set <slug> updated "<timestamp>"
+  → Update frontmatter property trực tiếp qua Obsidian API
+
+Live search (search trong Obsidian, không phải file system):
+  /obsidian-cli search "<query>"
+```
+
+**Khi dùng obsidian-cli thay vì MCP tools:**
+- Cần backlink graph thực (Obsidian tính, không phải grep)
+- Cần append vào daily note đang mở
+- Cần sync property với Obsidian UI (Dataview, Bases)
+- User đang nhìn vào Obsidian và muốn thao tác live
+
+**Viết OFM đúng syntax** (callouts, embeds, Dataview queries) — dùng `obsidian-markdown` skill:
+```
+/obsidian-markdown callout type=warning
+/obsidian-markdown dataview query="TABLE tags FROM wiki/"
+/obsidian-markdown embed [[concept-momentum-trading]]
+```
+
+### 7. LINT — Dọn dẹp định kỳ
 
 Chạy khi user yêu cầu hoặc sau mỗi 10 lần ingest:
 
@@ -199,7 +296,9 @@ Khi tạo page mới về trading:
 
 ---
 
-## MCP Tools Quick Reference
+## Tools Quick Reference
+
+### MCP Server (server.py) — không cần Obsidian mở
 
 | Tool | Khi nào dùng |
 |------|-------------|
@@ -217,6 +316,19 @@ Khi tạo page mới về trading:
 | `arxiv_fetch_paper` | Lấy full metadata + save vào `papers/` |
 | `knowledge_search` | Auto-search Arxiv, validate, save wiki nếu useful |
 
+### kepano/obsidian-skills — cần Obsidian mở (trừ defuddle)
+
+| Skill | Khi nào dùng |
+|-------|-------------|
+| `/defuddle <url>` | Extract clean markdown từ web URL trước khi ingest |
+| `/obsidian-cli backlinks [[slug]]` | Xem backlink graph thực từ Obsidian |
+| `/obsidian-cli daily:append "<text>"` | Append vào daily note đang mở |
+| `/obsidian-cli property:set <slug> <key> <val>` | Update frontmatter qua Obsidian API |
+| `/obsidian-cli search "<query>"` | Search live trong Obsidian (không phải filesystem) |
+| `/obsidian-markdown callout/dataview/embed` | Viết OFM syntax đúng chuẩn |
+| `/obsidian-canvas` | Tạo knowledge graph canvas |
+| `/obsidian-bases` | Tạo database view từ frontmatter |
+
 ---
 
 ## Anti-patterns — KHÔNG làm
@@ -227,6 +339,10 @@ Khi tạo page mới về trading:
 - ❌ Quên update page cũ khi source mới có thông tin liên quan
 - ❌ Để conversation insights biến mất vào chat history
 - ❌ Chạy `wiki_write` mà không `wiki_search` trước
+- ❌ Dùng `obsidian-cli` khi Obsidian không mở — sẽ timeout/fail, dùng MCP tools thay thế
+- ❌ Paste raw HTML vào wiki — dùng `defuddle` để scrape sạch trước
+- ❌ Fetch Arxiv paper bằng tay khi đã có `arxiv_fetch_paper`
+- ❌ Viết Dataview/callout syntax tự phán đoán — dùng `obsidian-markdown` skill để đúng OFM
 
 ---
 

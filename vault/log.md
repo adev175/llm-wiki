@@ -9,3 +9,11 @@
   - Vault ready for ingest workflow
 
 ---
+
+- **2026-04-09 10:15** — Created wiki page: `concept-momentum-trading`
+
+- **2026-04-09 10:16** — Updated wiki page: `concept-momentum-trading`
+
+- **2026-04-09 10:16** — Created wiki page: `strategy-trend-following`
+
+- **2026-04-09 10:16** — Created wiki page: `entity-ernie-chan`
