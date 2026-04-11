@@ -16,7 +16,17 @@
       "Bash(C:/Users/nhata/PycharmProjects/llm-wiki/.venv/Scripts/python.exe --version)",
       "Bash(C:/Users/nhata/PycharmProjects/llm-wiki/.venv/Scripts/python.exe -c \"import mcp; import httpx; import yaml; print\\('all deps ok'\\)\")",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
-      "Bash(echo \"\")"
+      "Bash(echo \"\")",
+      "Bash(claude mcp:*)",
+      "Bash(npx --version)",
+      "Bash(docker --version)",
+      "Bash(docker info:*)",
+      "Skill(update-config)",
+      "Read(//c/Users/nhata/.claude/**)",
+      "Read(//c/Users/nhata/.claude/skills/**)",
+      "Bash(mkdir -p ~/.claude/commands)",
+      "Bash(cp ~/.claude/skills/agent-skills/.claude/commands/*.md ~/.claude/commands/)",
+      "Bash(powershell:*)"
     ]
   }
 }
