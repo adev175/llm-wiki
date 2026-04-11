@@ -8,13 +8,13 @@
 
 ```
 vault/
-├── raw/                        # Nguồn: logs, code, transcripts, reports
-├── wiki/
-│   ├── _index.md
-│   ├── _lint-report.md
-│   ├── kaizen-backlog.md       # Danh sách issue + idea — LIVING DOCUMENT
-│   ├── kaizen-standard.md      # Chuẩn hiện tại của hệ thống (baseline)
-│   └── kaizen-log-<date>.md    # Mỗi vòng PDCA = 1 log entry
+├── raw/                             # Nguồn: logs, code, transcripts, reports
+├── 10-kaizen/                       # Kaizen files (type: kaizen)
+│   ├── kaizen-backlog.md            # Danh sách issue + idea — LIVING DOCUMENT
+│   ├── kaizen-standard.md           # Chuẩn hiện tại của hệ thống (baseline)
+│   └── kaizen-log-<date>.md         # Mỗi vòng PDCA = 1 log entry
+├── _index.md                        # vault root — auto-gen
+├── _lint-report.md                  # vault root — auto-gen
 └── log.md
 ```
 
@@ -22,6 +22,7 @@ vault/
 - `kaizen-backlog.md` là file duy nhất được **append liên tục** — không xoá entry cũ, chỉ thêm trạng thái.
 - `kaizen-standard.md` là baseline — chỉ update sau khi bước **A (Act)** hoàn thành và được xác nhận.
 - Mỗi issue phải có `id` duy nhất theo format `K-<YYYY-MM-DD>-<seq>` (e.g. `K-2026-04-11-003`).
+- Tất cả kaizen files dùng `type: kaizen` trong frontmatter → tự động route vào `10-kaizen/`.
 
 ---
 

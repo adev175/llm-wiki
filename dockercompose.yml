@@ -1,0 +1,58 @@
+version: "3.8"
+
+# DocAgent — One command to run everything
+# Usage: docker compose up
+# Then open: http://localhost:8080
+
+services:
+
+  # ── 1. Vault server (llm-wiki MCP) ──────────────────────────────
+  llm-wiki:
+    build:
+      context: ../llm-wiki      # Build from sibling llm-wiki repo
+      dockerfile: Dockerfile    # Uses llm-wiki's own Dockerfile
+    container_name: docagent-vault
+    ports:
+      - "${LLM_WIKI_PORT:-3000}:3000"
+    volumes:
+      - ./vault:/app/vault      # Vault persists on host machine
+    environment:
+      - VAULT_PATH=/app/vault
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ── 2. Agentic AI service ────────────────────────────────────────
+  agent:
+    build: ./agent
+    container_name: docagent-agent
+    ports:
+      - "${AGENT_PORT:-8000}:8000"
+    volumes:
+      - ${DOCS_PATH}:/docs:ro   # Mount customer's docs folder (read-only)
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - DOCS_PATH=/docs
+      - LLM_WIKI_URL=http://llm-wiki:3000
+    depends_on:
+      llm-wiki:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── 3. Web chat UI ───────────────────────────────────────────────
+  ui:
+    build: ./ui
+    container_name: docagent-ui
+    ports:
+      - "${UI_PORT:-8080}:7860"
+    environment:
+      - AGENT_URL=http://agent:8000
+    depends_on:
+      - agent
+    restart: unless-stopped

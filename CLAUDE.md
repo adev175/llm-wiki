@@ -61,16 +61,28 @@ vault/
 │   └── <timestamp>-<slug>.md
 ├── raw/                   # Nguồn gốc — KHÔNG chỉnh sửa, chỉ thêm
 │   └── *.md / *.txt / *.pdf
-├── wiki/                  # LLM owns this entirely
-│   ├── _index.md          # Auto-generated catalog
-│   ├── _lint-report.md    # Auto-generated health check
-│   ├── kaizen-standard.md # System baseline — cập nhật sau Act step
-│   ├── kaizen-backlog.md  # Living issue tracker
-│   └── *.md               # Knowledge pages
+├── 01-daily/              # Daily research logs (type: daily)
+│   └── log-<date>.md
+├── 02-projects/           # Project tracking (type: project)
+├── 03-concepts/           # Technical concepts (type: concept)
+├── 04-strategies/         # Trading strategies (type: strategy)
+├── 05-sources/            # Source summaries — articles, books (type: source)
+├── 06-entities/           # People, orgs, products (type: entity)
+├── 07-ideas/              # Brain dumps, explorations (type: idea)
+├── 08-decisions/          # Decision records (type: decision)
+├── 09-logs/               # Conversation captures (type: log)
+├── 10-kaizen/             # System improvement notes (type: kaizen)
 ├── papers/                # Arxiv papers fetched via arxiv_fetch_paper
 │   └── paper-<arxiv-id>.md
+├── wiki/                  # Legacy fallback (type: note / unclassified)
+├── _index.md              # Auto-generated catalog (vault root)
+├── _lint-report.md        # Auto-generated health check (vault root)
 └── log.md                 # Append-only activity log
 ```
+
+**Routing logic:** `wiki_write` tự động route file vào đúng folder dựa trên `type` field (hoặc slug prefix). `wiki_read/update/delete` tìm file across tất cả folders.
+
+**Migration:** Chạy `wiki_migrate_folders()` một lần để move files cũ từ `wiki/` sang đúng typed folders.
 
 **Quy tắc cứng:**
 - `raw/` là immutable. Chỉ dùng `wiki_ingest_raw` để thêm vào đây, không bao giờ xoá.
@@ -90,13 +102,31 @@ vault/
   - `source-*` — summary của 1 nguồn cụ thể (paper, article, book chapter)
   - `concept-*` — khái niệm kỹ thuật / lý thuyết
   - `entity-*` — người, tổ chức, sản phẩm
-  - `strategy-*` — trading strategy cụ thể
-  - `log-*` — captured từ conversation hoặc daily anchor
-  - `decision-*` — research decision log (tại sao chọn approach X, bỏ Y)
+  - `strategy-*` — trading strategy cụ thể → `04-strategies/`
+  - `log-*` — captured từ conversation hoặc daily anchor → `09-logs/`
+  - `decision-*` — research decision log (tại sao chọn approach X, bỏ Y) → `08-decisions/`
+  - `project-*` — project tracking → `02-projects/`
+  - `idea-*` — brain dump, exploration → `07-ideas/`
+  - `kaizen-*` — system improvement → `10-kaizen/`
+
+### Type → Folder mapping
+| type | folder | slug prefix |
+|------|--------|-------------|
+| daily | 01-daily/ | log-YYYY-MM-DD |
+| project | 02-projects/ | project-* |
+| concept | 03-concepts/ | concept-* |
+| strategy | 04-strategies/ | strategy-* |
+| source | 05-sources/ | source-* |
+| entity | 06-entities/ | entity-* |
+| idea | 07-ideas/ | idea-* |
+| decision | 08-decisions/ | decision-* |
+| log | 09-logs/ | log-* |
+| kaizen | 10-kaizen/ | kaizen-* |
+| note | wiki/ | (fallback) |
 
 ### Tags chuẩn
 ```
-source, concept, entity, strategy, log,
+source, concept, entity, strategy, log, project, idea, decision,
 trading, quant, risk, ml, data, macro
 ```
 
@@ -330,6 +360,7 @@ Khi tạo page mới về trading:
 | `wiki_ingest_raw` | Lưu raw source trước khi process |
 | `wiki_rebuild_index` | Sau mỗi batch ingest |
 | `wiki_lint` | Health check định kỳ |
+| `wiki_migrate_folders` | Move legacy `wiki/` files → typed subfolders (chạy 1 lần) |
 | `wiki_log` | Xem lịch sử hoạt động |
 | `arxiv_search` | Tìm papers Arxiv theo query |
 | `arxiv_fetch_paper` | Lấy full metadata + save vào `papers/` |

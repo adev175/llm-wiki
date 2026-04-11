@@ -49,20 +49,24 @@
 - **Transport:** `stdio` — Local only, Claude Desktop only
 - **Ngôn ngữ:** Python 3.x
 - **Dependencies:** `httpx`, `PyYAML`, `python-dateutil`
-- **Số tools:** 13 tools
+- **Số tools:** 17 tools
 
 | Tool | Mô tả | Trạng thái |
 |------|-------|-----------|
-| `wiki_write` | Tạo/overwrite page | ✅ Hoạt động |
-| `wiki_update` | Append/merge vào page | ✅ Hoạt động |
-| `wiki_read` | Đọc page theo slug | ✅ Hoạt động |
-| `wiki_delete` | Xóa page | ✅ Hoạt động |
+| `wiki_write` | Tạo/overwrite page, auto-route theo type | ✅ Hoạt động |
+| `wiki_update` | Append/merge vào page (tìm xuyên folders) | ✅ Hoạt động |
+| `wiki_read` | Đọc page theo slug (tìm xuyên folders) | ✅ Hoạt động |
+| `wiki_delete` | Xóa page (tìm xuyên folders) | ✅ Hoạt động |
 | `wiki_list` | Liệt kê pages (filter tag) | ✅ Hoạt động |
 | `wiki_search` | Full-text search (substring) | ✅ Hoạt động (không semantic) |
 | `wiki_ingest_raw` | Lưu raw source | ✅ Hoạt động (text only) |
-| `wiki_rebuild_index` | Tạo lại `_index.md` | ✅ Hoạt động |
+| `wiki_rebuild_index` | Tạo lại `_index.md` tại vault root | ✅ Hoạt động |
 | `wiki_lint` | Health check report | ✅ Hoạt động (report only) |
 | `wiki_log` | Đọc activity log | ✅ Hoạt động |
+| `wiki_capture` | Quick-capture vào inbox/ | ✅ Hoạt động |
+| `wiki_list_inbox` | Xem inbox chưa processed | ✅ Hoạt động |
+| `wiki_daily` | Daily log trong 01-daily/ | ✅ Hoạt động |
+| `wiki_migrate_folders` | Move legacy wiki/ files → typed folders (1 lần) | ✅ Mới thêm |
 | `arxiv_search` | Tìm papers Arxiv | ✅ Hoạt động |
 | `arxiv_fetch_paper` | Fetch + save paper | ✅ Hoạt động |
 | `knowledge_search` | Auto-search + save | ⚠️ Arxiv only (docstring sai: nói "HF") |
@@ -71,15 +75,26 @@
 
 ```
 vault/
-├── raw/               # Empty — chưa có source nào được ingest
-├── wiki/
-│   ├── _index.md      # Auto-gen (0 pages)
-│   └── _lint-report.md # Empty
-├── papers/            # Empty — chưa fetch paper nào
-└── log.md             # 1 entry (initialization, 2026-04-08)
+├── inbox/             # Quick-capture buffer
+├── raw/               # Immutable source store
+├── 01-daily/          # Daily research logs (type: daily)
+├── 02-projects/       # Project tracking (type: project)
+├── 03-concepts/       # Technical concepts (type: concept)
+├── 04-strategies/     # Trading strategies (type: strategy)
+├── 05-sources/        # Source summaries (type: source)
+├── 06-entities/       # People, orgs (type: entity)
+├── 07-ideas/          # Brain dumps (type: idea)
+├── 08-decisions/      # Decision records (type: decision)
+├── 09-logs/           # Conversation captures (type: log)
+├── 10-kaizen/         # System improvement notes (type: kaizen)
+├── papers/            # Arxiv papers
+├── wiki/              # Legacy fallback (type: note)
+├── _index.md          # Auto-gen catalog (vault root)
+├── _lint-report.md    # Lint report (vault root)
+└── log.md             # Activity log
 ```
 
-**Nhận xét:** Vault đang ở trạng thái **bootstrap** — cấu trúc đúng nhưng chưa có content.
+**Thay đổi so với audit 2026-04-08:** Cấu trúc flat `wiki/` đã được thay bằng 10 typed subfolders. `_index.md` và `_lint-report.md` chuyển lên vault root. Routing tự động dựa trên `type` field trong frontmatter.
 
 ### 2.3 Agent Instructions (`CLAUDE.md`)
 

@@ -34,10 +34,9 @@ Biến llm-wiki từ **manual tool** thành **living knowledge system** — nơi
                ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │                    vault/ (Enhanced)                             │
-│  raw/          wiki/              papers/       log.md          │
-│                + embeddings/      + summaries/  + stats.json    │
-│                  *.npy hoặc       (agent-gen)                   │
-│                  SQLite vec                                      │
+│  inbox/   raw/    01-daily/ … 10-kaizen/   papers/   log.md    │
+│           (imm.)  [typed subfolders]        + summaries/        │
+│           embeddings/ (*.npy / SQLite vec)  + stats.json        │
 └──────────────────────────────────────────────────────────────────┘
                │
                ▼ (optional)

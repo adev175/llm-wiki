@@ -43,19 +43,23 @@ Everything gets saved automatically. You don't need to learn any commands.
 
 ### Knowledge pages
 
-Each topic gets its own Markdown file in `vault/wiki/` with structured frontmatter. Pages are linked with `[[wikilinks]]` so nothing is an island. Claude never creates a page without first checking if one already exists.
+Each topic gets its own Markdown file with structured frontmatter. Pages are linked with `[[wikilinks]]` so nothing is an island. Claude never creates a page without first checking if one already exists.
 
-**Page types** (determined by slug prefix):
+Notes are automatically routed to a typed subfolder based on their `type` field:
 
-| Type | Prefix | What it stores |
-|------|--------|----------------|
-| Concept | `concept-` | A technical idea or theory — definition, how it works, edge cases |
-| Strategy | `strategy-` | A trading strategy — setup, signals, risk rules, empirical notes |
-| Source | `source-` | Summary of a book, paper, or article — key claims, quotes, context |
-| Entity | `entity-` | A person, firm, or tool — background, notable work, opinions |
-| Decision | `decision-` | Why you chose approach X over Y — alternatives considered, reversibility |
-| Log | `log-` | Captured conversation insight or daily research note |
-| Paper | `paper-` | Arxiv paper — abstract, methods, results, links to related concepts |
+| Type | Folder | Slug prefix | What it stores |
+|------|--------|-------------|----------------|
+| concept | `03-concepts/` | `concept-` | A technical idea or theory — definition, how it works, edge cases |
+| strategy | `04-strategies/` | `strategy-` | A trading strategy — setup, signals, risk rules, empirical notes |
+| source | `05-sources/` | `source-` | Summary of a book, paper, or article — key claims, quotes, context |
+| entity | `06-entities/` | `entity-` | A person, firm, or tool — background, notable work, opinions |
+| project | `02-projects/` | `project-` | Project plans, tracking, milestones |
+| idea | `07-ideas/` | `idea-` | Brain dumps, explorations |
+| decision | `08-decisions/` | `decision-` | Why you chose approach X over Y — alternatives considered, reversibility |
+| log | `09-logs/` | `log-` | Captured conversation insight |
+| daily | `01-daily/` | `log-YYYY-MM-DD` | Daily research anchor note |
+| kaizen | `10-kaizen/` | `kaizen-` | System improvement notes |
+| paper | `papers/` | `paper-` | Arxiv paper — abstract, methods, results, links to related concepts |
 
 ### Synonym-aware search
 
@@ -73,7 +77,7 @@ Don't want to think about where something belongs right now? Claude drops it in 
 
 ### Daily research log
 
-Every session can anchor to today's date via `vault/wiki/log-YYYY-MM-DD.md`. Useful for tracking what you read, what questions came up, and what decisions were made on a given day.
+Every session can anchor to today's date via `vault/01-daily/log-YYYY-MM-DD.md`. Useful for tracking what you read, what questions came up, and what decisions were made on a given day.
 
 ### Arxiv integration
 
@@ -99,10 +103,10 @@ Once set up, the index rebuilds automatically after each Claude session.
 ### Vault health check
 
 ```bash
-python hooks/validate-frontmatter.py vault/wiki
+python hooks/validate-frontmatter.py vault/
 ```
 
-Checks all pages for missing required fields, invalid types, malformed slugs, and non-list aliases.
+Checks all pages across all typed folders for missing required fields, invalid types, malformed slugs, and non-list aliases.
 
 ---
 
@@ -110,12 +114,25 @@ Checks all pages for missing required fields, invalid types, malformed slugs, an
 
 ```
 vault/
-├── inbox/     # Unprocessed quick-captures
-├── raw/       # Original source text — never edited
-├── wiki/      # All knowledge pages
-├── papers/    # Arxiv papers
-└── log.md     # Activity history
+├── inbox/          # Unprocessed quick-captures
+├── raw/            # Original source text — never edited
+├── 01-daily/       # Daily research logs
+├── 02-projects/    # Project tracking
+├── 03-concepts/    # Technical concepts
+├── 04-strategies/  # Trading strategies
+├── 05-sources/     # Book / article / paper summaries
+├── 06-entities/    # People, orgs, tools
+├── 07-ideas/       # Brain dumps
+├── 08-decisions/   # Decision records
+├── 09-logs/        # Conversation captures
+├── 10-kaizen/      # System improvement notes
+├── papers/         # Arxiv papers
+├── wiki/           # Legacy / unclassified fallback
+├── _index.md       # Auto-generated catalog
+└── log.md          # Activity history
 ```
+
+> **Migration:** If upgrading from an older version with a flat `vault/wiki/`, run `wiki_migrate_folders()` once to move existing files into the correct typed subfolders.
 
 ---
 

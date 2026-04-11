@@ -28,7 +28,9 @@
       "Bash(cp ~/.claude/skills/agent-skills/.claude/commands/*.md ~/.claude/commands/)",
       "Bash(powershell:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "Bash(grep -n \"VAULT\\\\|vault_path\\\\|wiki_dir\\\\|papers_dir\\\\|inbox\" c:/Users/nhata/PycharmProjects/llm-wiki/mcp_server/*.py)",
+      "Bash(python -m py_compile mcp_server/server.py)"
     ]
   }
 }

@@ -29,15 +29,33 @@ except ImportError:
 import os
 _vault_override = os.environ.get("VAULT_ROOT")
 VAULT_ROOT = Path(_vault_override) if _vault_override else Path(__file__).parent.parent / "vault"
-WIKI_DIR = VAULT_ROOT / "wiki"
+WIKI_DIR = VAULT_ROOT / "wiki"       # legacy fallback folder
 RAW_DIR = VAULT_ROOT / "raw"
 PAPERS_DIR = VAULT_ROOT / "papers"
 LOG_FILE = VAULT_ROOT / "log.md"
-INDEX_FILE = WIKI_DIR / "_index.md"
-LINT_FILE = WIKI_DIR / "_lint-report.md"
+INDEX_FILE = VAULT_ROOT / "_index.md"
+LINT_FILE = VAULT_ROOT / "_lint-report.md"
+
+# Note type → numbered folder mapping
+TYPE_FOLDERS: dict[str, str] = {
+    "daily": "01-daily",
+    "project": "02-projects",
+    "concept": "03-concepts",
+    "strategy": "04-strategies",
+    "source": "05-sources",
+    "entity": "06-entities",
+    "idea": "07-ideas",
+    "decision": "08-decisions",
+    "log": "09-logs",
+    "kaizen": "10-kaizen",
+}
 
 for d in (WIKI_DIR, RAW_DIR, PAPERS_DIR):
     d.mkdir(parents=True, exist_ok=True)
+
+# Pre-create all typed folders
+for _folder in TYPE_FOLDERS.values():
+    (VAULT_ROOT / _folder).mkdir(parents=True, exist_ok=True)
 
 mcp = FastMCP("llm-wiki")
 
@@ -87,11 +105,33 @@ def _slug_to_type(slug: str) -> str:
         "paper-": "paper",
         "decision-": "decision",
         "kaizen-": "kaizen",
+        "project-": "project",
+        "idea-": "idea",
+        "daily-": "daily",
     }
     for prefix, t in prefix_map.items():
         if slug.startswith(prefix):
             return t
     return "note"
+
+
+def _type_to_dir(note_type: str) -> Path:
+    """Return the vault subfolder Path for a given note type, creating it if needed."""
+    folder = TYPE_FOLDERS.get(note_type, "wiki")
+    d = VAULT_ROOT / folder
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _find_page(slug: str) -> Path | None:
+    """Find an existing page by slug across all typed folders + legacy wiki/ fallback."""
+    candidates = [VAULT_ROOT / folder for folder in TYPE_FOLDERS.values()]
+    candidates.append(WIKI_DIR)
+    for d in candidates:
+        p = d / f"{slug}.md"
+        if p.exists():
+            return p
+    return None
 
 
 def _build_page(slug: str, title: str, content: str, tags: list[str],
@@ -115,7 +155,14 @@ def _build_page(slug: str, title: str, content: str, tags: list[str],
 
 
 def _all_wiki_pages() -> list[Path]:
-    return [p for p in WIKI_DIR.glob("*.md") if not p.name.startswith("_")]
+    """Return all wiki pages across all typed folders + legacy wiki/ fallback."""
+    search_dirs = [VAULT_ROOT / folder for folder in TYPE_FOLDERS.values()]
+    search_dirs.append(WIKI_DIR)
+    pages = []
+    for d in search_dirs:
+        if d.exists():
+            pages.extend(p for p in d.glob("*.md") if not p.name.startswith("_"))
+    return pages
 
 
 def _extract_wikilinks(text: str) -> list[str]:
@@ -142,14 +189,21 @@ def wiki_write(slug: str, title: str, content: str,
         note_type: Explicit type override (auto-derived from slug prefix if omitted)
         aliases: Alternative names for search disambiguation, e.g. ['mean reversion', 'stat arb']
     """
-    path = WIKI_DIR / f"{slug}.md"
+    resolved_type = note_type or _slug_to_type(slug)
+    # Check if page already exists in any folder (to support updates via wiki_write)
+    existing = _find_page(slug)
+    if existing:
+        path = existing
+    else:
+        path = _type_to_dir(resolved_type) / f"{slug}.md"
     existed = path.exists()
     page = _build_page(slug, title, content, tags or [], source,
-                       note_type=note_type, aliases=aliases)
+                       note_type=resolved_type, aliases=aliases)
     path.write_text(page, encoding="utf-8")
     action = "Updated" if existed else "Created"
-    _append_log(f"{action} wiki page: `{slug}`")
-    return f"✓ {action}: {slug}.md"
+    folder = path.parent.name
+    _append_log(f"{action} wiki page: `{slug}` → {folder}/")
+    return f"✓ {action}: {folder}/{slug}.md"
 
 
 @mcp.tool()
@@ -163,8 +217,8 @@ def wiki_update(slug: str, new_content: str, source: str = "manual",
         source: Origin of this update
         mode: 'append' to add section, 'merge' to synthesize (default)
     """
-    path = WIKI_DIR / f"{slug}.md"
-    if not path.exists():
+    path = _find_page(slug)
+    if path is None:
         return f"✗ Not found: {slug}.md — use wiki_write to create it first."
     meta, body = _parse_frontmatter(path.read_text(encoding="utf-8"))
     meta["updated"] = _now()
@@ -190,8 +244,8 @@ def wiki_read(slug: str) -> str:
     Args:
         slug: Page slug, e.g. 'concept-momentum-trading'
     """
-    path = WIKI_DIR / f"{slug}.md"
-    if not path.exists():
+    path = _find_page(slug)
+    if path is None:
         return f"✗ Not found: {slug}.md"
     return path.read_text(encoding="utf-8")
 
@@ -203,12 +257,13 @@ def wiki_delete(slug: str) -> str:
     Args:
         slug: Page slug to delete
     """
-    path = WIKI_DIR / f"{slug}.md"
-    if not path.exists():
+    path = _find_page(slug)
+    if path is None:
         return f"✗ Not found: {slug}.md"
+    folder = path.parent.name
     path.unlink()
-    _append_log(f"Deleted wiki page: `{slug}`")
-    return f"✓ Deleted: {slug}.md"
+    _append_log(f"Deleted wiki page: `{slug}` from {folder}/")
+    return f"✓ Deleted: {folder}/{slug}.md"
 
 
 @mcp.tool()
@@ -469,8 +524,44 @@ def wiki_list_inbox() -> str:
 
 
 @mcp.tool()
+def wiki_migrate_folders() -> str:
+    """Migrate flat vault/wiki/ files to typed subfolders based on slug prefix / frontmatter type.
+    Safe to run multiple times — skips files that are already in the correct location.
+    """
+    legacy_files = [p for p in WIKI_DIR.glob("*.md") if not p.name.startswith("_")]
+    if not legacy_files:
+        return "✓ Nothing to migrate — vault/wiki/ is already empty."
+
+    moved, skipped = [], []
+    for p in legacy_files:
+        try:
+            meta, _ = _parse_frontmatter(p.read_text(encoding="utf-8"))
+            note_type = meta.get("type") or _slug_to_type(p.stem)
+            dest_dir = _type_to_dir(note_type)
+            dest = dest_dir / p.name
+            if dest == p:
+                skipped.append(p.name)
+                continue
+            if dest.exists():
+                skipped.append(f"{p.name} (conflict in {dest_dir.name}/)")
+                continue
+            p.rename(dest)
+            moved.append(f"{p.name} → {dest_dir.name}/")
+        except Exception as e:
+            skipped.append(f"{p.name} (error: {e})")
+
+    _append_log(f"Migrated {len(moved)} wiki files to typed folders")
+    lines = [f"**Migration complete** — {len(moved)} moved, {len(skipped)} skipped\n"]
+    if moved:
+        lines += ["### Moved"] + [f"- {m}" for m in moved]
+    if skipped:
+        lines += ["### Skipped"] + [f"- {s}" for s in skipped]
+    return "\n".join(lines)
+
+
+@mcp.tool()
 def wiki_daily(entry: str | None = None) -> str:
-    """Read or append to today's daily research log (vault/wiki/log-<date>.md).
+    """Read or append to today's daily research log (01-daily/log-<date>.md).
     If the daily note doesn't exist, creates it.
 
     Args:
@@ -478,7 +569,8 @@ def wiki_daily(entry: str | None = None) -> str:
     """
     today = _today()
     slug = f"log-{today}"
-    path = WIKI_DIR / f"{slug}.md"
+    # Check both new daily folder and legacy locations
+    path = _find_page(slug) or (_type_to_dir("daily") / f"{slug}.md")
 
     if not path.exists():
         content = (
