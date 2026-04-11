@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/hooks-schema.json",
+  "_comment": "Merge the 'hooks' object below into ~/.claude/settings.json. Adjust VAULT_ROOT path to match your setup.",
+  "_setup": "Replace C:/Users/nhata/PycharmProjects/llm-wiki with your actual repo path.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "bash -c 'FILE=\"$CLAUDE_FILE_PATH\"; if [[ \"$FILE\" == *.md ]] && ([[ \"$FILE\" == */vault/wiki/* ]] || [[ \"$FILE\" == */vault/papers/* ]]); then python \"C:/Users/nhata/PycharmProjects/llm-wiki/hooks/update-modified.py\" \"$FILE\" 2>/dev/null || true; fi'",
+        "description": "Auto-update 'updated' timestamp after editing a wiki or papers note"
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'if command -v qmd &>/dev/null; then qmd embed -c llm-wiki 2>/dev/null || true; fi'",
+            "timeout": 120,
+            "statusMessage": "Updating QMD search index..."
+          }
+        ]
+      }
+    ]
+  },
+  "_notes": {
+    "QMD_setup": "To enable semantic search: npm install -g @tobilu/qmd && qmd collection add ./vault --name llm-wiki && qmd context add llm-wiki 'Quant trading research vault' && qmd embed",
+    "validate_frontmatter": "Run manually: python hooks/validate-frontmatter.py vault/wiki",
+    "why_no_PreToolUse_validation": "Validation as PreToolUse hook can be noisy; prefer running standalone audit instead"
+  }
+}

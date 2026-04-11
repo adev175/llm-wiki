@@ -21,15 +21,17 @@ Bạn là **Wiki Compiler Agent**. Nhiệm vụ của bạn là xây dựng, mai
 │ wiki_update  │        │ obsidian-cli         │ ← backlinks, search live
 │ wiki_search  │        │ defuddle             │ ← web URL → clean markdown
 │ wiki_lint    │        │ obsidian-bases       │ ← database views
-│ arxiv_*      │        │ obsidian-canvas      │ ← knowledge graph
-│ knowledge_*  │        └──────────┬───────────┘
+│ wiki_capture │        │ obsidian-canvas      │ ← knowledge graph
+│ wiki_daily   │        └──────────┬───────────┘
+│ arxiv_*      │                   │
+│ knowledge_*  │                   │
 └──────┬───────┘                   │
        └───────────────┬───────────┘
                        ▼
          ┌─────────────────────────┐
-         │      Obsidian Vault     │
-         │  raw/    wiki/  papers/ │
-         └─────────────────────────┘
+         │         Obsidian Vault          │
+         │  inbox/  raw/  wiki/  papers/  │
+         └─────────────────────────────────┘
                        ↑ UI
                  Obsidian App
           (Graph View, Dataview, Bases)
@@ -55,11 +57,15 @@ git clone https://github.com/kepano/obsidian-skills.git ~/.claude/skills/obsidia
 
 ```
 vault/
+├── inbox/                 # Quick-capture buffer — chưa processed
+│   └── <timestamp>-<slug>.md
 ├── raw/                   # Nguồn gốc — KHÔNG chỉnh sửa, chỉ thêm
 │   └── *.md / *.txt / *.pdf
 ├── wiki/                  # LLM owns this entirely
 │   ├── _index.md          # Auto-generated catalog
 │   ├── _lint-report.md    # Auto-generated health check
+│   ├── kaizen-standard.md # System baseline — cập nhật sau Act step
+│   ├── kaizen-backlog.md  # Living issue tracker
 │   └── *.md               # Knowledge pages
 ├── papers/                # Arxiv papers fetched via arxiv_fetch_paper
 │   └── paper-<arxiv-id>.md
@@ -68,7 +74,9 @@ vault/
 
 **Quy tắc cứng:**
 - `raw/` là immutable. Chỉ dùng `wiki_ingest_raw` để thêm vào đây, không bao giờ xoá.
+- `inbox/` là triage buffer — dùng `wiki_capture` để thêm, `wiki_process_inbox` để process.
 - Tất cả wiki pages đều có frontmatter YAML (do `wiki_write` tự tạo).
+- Frontmatter phải có `type` field (auto-derived từ slug prefix nếu không explicit).
 - Mọi page phải có ít nhất 1 `[[wiki link]]` đến page khác — không có orphan.
 - Sau mỗi batch ingest, chạy `wiki_rebuild_index`.
 
@@ -83,7 +91,8 @@ vault/
   - `concept-*` — khái niệm kỹ thuật / lý thuyết
   - `entity-*` — người, tổ chức, sản phẩm
   - `strategy-*` — trading strategy cụ thể
-  - `log-*` — captured từ conversation
+  - `log-*` — captured từ conversation hoặc daily anchor
+  - `decision-*` — research decision log (tại sao chọn approach X, bỏ Y)
 
 ### Tags chuẩn
 ```
@@ -101,12 +110,19 @@ trading, quant, risk, ml, data, macro
 ---
 title: "Momentum Trading"
 slug: "concept-momentum-trading"
+type: "concept"
+aliases: ["momentum strategy", "trend following", "time-series momentum"]
 tags: ["concept", "strategy", "trading"]
 source: "source-ernest-chan-book-2"
 created: "2026-04-08"
 updated: "2026-04-08 14:30"
 ---
 ```
+
+**`type` field** — auto-derived từ slug prefix nếu không explicit. Dùng cho Dataview queries:
+`WHERE type = "concept"`, `WHERE type = "strategy"`, v.v.
+
+**`aliases` field** — list các synonym/alternate names. `wiki_search` check aliases khi query không khớp chính xác body text. Đặc biệt quan trọng cho quant concepts có nhiều tên.
 
 ---
 
@@ -302,12 +318,15 @@ Khi tạo page mới về trading:
 
 | Tool | Khi nào dùng |
 |------|-------------|
-| `wiki_write` | Tạo page mới hoàn toàn |
+| `wiki_write` | Tạo page mới hoàn toàn (hỗ trợ `type`, `aliases`) |
 | `wiki_update` | Thêm info vào page đã có |
 | `wiki_read` | Đọc 1 page cụ thể |
 | `wiki_delete` | Page sai / trùng lặp |
 | `wiki_list` | Xem toàn bộ wiki / filter theo tag |
-| `wiki_search` | Tìm trước khi tạo (tránh duplicate) |
+| `wiki_search` | Tìm trước khi tạo — check text + aliases |
+| `wiki_capture` | Quick-capture ý tưởng vào inbox/ (không cần full frontmatter) |
+| `wiki_list_inbox` | Xem inbox chưa processed |
+| `wiki_daily` | Đọc / append vào daily research log hôm nay |
 | `wiki_ingest_raw` | Lưu raw source trước khi process |
 | `wiki_rebuild_index` | Sau mỗi batch ingest |
 | `wiki_lint` | Health check định kỳ |
@@ -328,6 +347,68 @@ Khi tạo page mới về trading:
 | `/obsidian-markdown callout/dataview/embed` | Viết OFM syntax đúng chuẩn |
 | `/obsidian-canvas` | Tạo knowledge graph canvas |
 | `/obsidian-bases` | Tạo database view từ frontmatter |
+
+---
+
+## Decision Log Template
+
+Khi capture research decision (tại sao chọn approach X, bỏ Y):
+
+```yaml
+---
+title: "Decision: [tên quyết định]"
+slug: "decision-<date>-<topic>"
+type: "decision"
+tags: ["decision", "trading"]
+status: "accepted"   # proposed | accepted | deprecated | superseded
+impact: "medium"     # high | medium | low
+reversibility: "medium"  # easy | medium | hard | irreversible
+source: "conversation-<date>"
+created: "<date>"
+updated: "<date>"
+---
+
+## Context
+[Tình huống nào dẫn đến quyết định này]
+
+## Decision
+[Đã quyết định gì và tại sao]
+
+## Alternatives Considered
+1. **Option A** — Pros: ... Cons: ...
+2. **Option B (chosen)** — Pros: ... Cons: ...
+
+## Consequences
+[Thay đổi gì sau quyết định này]
+
+## Review Date
+[Khi nào nên xem lại quyết định này]
+
+## Related
+[[concept-...]] [[strategy-...]]
+```
+
+---
+
+## Hooks Setup (1 lần)
+
+Merge `hooks/hook-configs.json` vào `~/.claude/settings.json` để bật automation:
+
+```bash
+# Auto-update 'updated' timestamp sau mỗi file edit
+# Stop hook: qmd embed sau mỗi agent turn (nếu QMD đã cài)
+
+# Optional: semantic search
+npm install -g @tobilu/qmd
+qmd collection add ./vault --name llm-wiki
+qmd context add llm-wiki "Quant trading research vault"
+qmd embed
+```
+
+```bash
+# Validate vault health thủ công
+python hooks/validate-frontmatter.py vault/wiki
+```
 
 ---
 

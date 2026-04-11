@@ -76,17 +76,40 @@ def _parse_frontmatter(text: str) -> tuple[dict, str]:
     return {}, text
 
 
+def _slug_to_type(slug: str) -> str:
+    """Derive type from slug prefix convention."""
+    prefix_map = {
+        "concept-": "concept",
+        "strategy-": "strategy",
+        "source-": "source",
+        "entity-": "entity",
+        "log-": "log",
+        "paper-": "paper",
+        "decision-": "decision",
+        "kaizen-": "kaizen",
+    }
+    for prefix, t in prefix_map.items():
+        if slug.startswith(prefix):
+            return t
+    return "note"
+
+
 def _build_page(slug: str, title: str, content: str, tags: list[str],
-                source: str, created: str | None = None) -> str:
+                source: str, created: str | None = None,
+                note_type: str | None = None,
+                aliases: list[str] | None = None) -> str:
     today = _today()
     meta = {
         "title": title,
         "slug": slug,
+        "type": note_type or _slug_to_type(slug),
         "tags": tags,
         "source": source,
         "created": created or today,
         "updated": _now(),
     }
+    if aliases:
+        meta["aliases"] = aliases
     fm = yaml.dump(meta, allow_unicode=True, default_flow_style=False).strip()
     return f"---\n{fm}\n---\n\n{content.strip()}\n"
 
@@ -105,7 +128,9 @@ def _extract_wikilinks(text: str) -> list[str]:
 
 @mcp.tool()
 def wiki_write(slug: str, title: str, content: str,
-               tags: list[str] | None = None, source: str = "manual") -> str:
+               tags: list[str] | None = None, source: str = "manual",
+               note_type: str | None = None,
+               aliases: list[str] | None = None) -> str:
     """Create a new wiki page. Overwrites if slug already exists.
 
     Args:
@@ -114,10 +139,13 @@ def wiki_write(slug: str, title: str, content: str,
         content: Markdown body (include [[wikilinks]])
         tags: List of tags, e.g. ['concept', 'trading']
         source: Origin of this content
+        note_type: Explicit type override (auto-derived from slug prefix if omitted)
+        aliases: Alternative names for search disambiguation, e.g. ['mean reversion', 'stat arb']
     """
     path = WIKI_DIR / f"{slug}.md"
     existed = path.exists()
-    page = _build_page(slug, title, content, tags or [], source)
+    page = _build_page(slug, title, content, tags or [], source,
+                       note_type=note_type, aliases=aliases)
     path.write_text(page, encoding="utf-8")
     action = "Updated" if existed else "Created"
     _append_log(f"{action} wiki page: `{slug}`")
@@ -220,17 +248,23 @@ def wiki_search(query: str) -> str:
     for p in _all_wiki_pages():
         text = p.read_text(encoding="utf-8")
         meta, body = _parse_frontmatter(text)
-        if query_lower in text.lower():
-            slug = meta.get("slug", p.stem)
-            title = meta.get("title", slug)
-            # Find first matching line
+        slug = meta.get("slug", p.stem)
+        title = meta.get("title", slug)
+        aliases = meta.get("aliases", [])
+
+        # Check full text OR aliases
+        alias_match = any(query_lower in a.lower() for a in aliases if isinstance(a, str))
+        if query_lower in text.lower() or alias_match:
+            match_note = " (alias match)" if alias_match and query_lower not in text.lower() else ""
+            # Find first matching line in body
             for line in body.splitlines():
                 if query_lower in line.lower():
                     snippet = line.strip()[:120]
-                    hits.append(f"- [[{slug}]] — **{title}**\n  > {snippet}")
+                    hits.append(f"- [[{slug}]] — **{title}**{match_note}\n  > {snippet}")
                     break
             else:
-                hits.append(f"- [[{slug}]] — **{title}** (match in frontmatter)")
+                hints_str = f" [aliases: {', '.join(aliases[:3])}]" if aliases else ""
+                hits.append(f"- [[{slug}]] — **{title}**{match_note}{hints_str} (match in frontmatter)")
 
     if not hits:
         return f"No results for: `{query}`"
@@ -376,6 +410,101 @@ def wiki_log(lines: int = 10) -> str:
         return "Log is empty."
     entries = [l for l in LOG_FILE.read_text(encoding="utf-8").splitlines() if l.strip()]
     return "\n".join(entries[-lines:])
+
+
+# ---------------------------------------------------------------------------
+# Inbox / capture tools
+# ---------------------------------------------------------------------------
+
+INBOX_DIR = VAULT_ROOT / "inbox"
+INBOX_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@mcp.tool()
+def wiki_capture(title: str, content: str, note_type: str = "log",
+                 tags: list[str] | None = None) -> str:
+    """Quick-capture a note to vault/inbox/ for later processing.
+    Use when you want to capture an idea/insight without full analysis yet.
+
+    Args:
+        title: Brief title for the capture
+        content: Note content (can be rough / unstructured)
+        note_type: Rough type hint: 'log', 'concept', 'strategy', 'entity', etc.
+        tags: Optional tags
+    """
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower())[:40].strip("-")
+    filename = f"{ts}-{slug}.md"
+    path = INBOX_DIR / filename
+    meta = {
+        "title": title,
+        "type": note_type,
+        "tags": tags or [note_type],
+        "captured": _now(),
+        "status": "inbox",
+    }
+    fm = yaml.dump(meta, allow_unicode=True, default_flow_style=False).strip()
+    path.write_text(f"---\n{fm}\n---\n\n{content.strip()}\n", encoding="utf-8")
+    _append_log(f"Captured to inbox: `{filename}`")
+    return f"✓ Captured: inbox/{filename}"
+
+
+@mcp.tool()
+def wiki_list_inbox() -> str:
+    """List all notes in vault/inbox/ awaiting processing."""
+    files = sorted(INBOX_DIR.glob("*.md"))
+    if not files:
+        return "✓ Inbox is empty."
+    lines = [f"**{len(files)} item(s) in inbox:**\n"]
+    for p in files:
+        try:
+            meta, _ = _parse_frontmatter(p.read_text(encoding="utf-8"))
+            title = meta.get("title", p.stem)
+            captured = meta.get("captured", "?")
+            note_type = meta.get("type", "?")
+            lines.append(f"- `{p.name}` — **{title}** [{note_type}] @ {captured}")
+        except Exception:
+            lines.append(f"- `{p.name}` (unreadable)")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def wiki_daily(entry: str | None = None) -> str:
+    """Read or append to today's daily research log (vault/wiki/log-<date>.md).
+    If the daily note doesn't exist, creates it.
+
+    Args:
+        entry: Text to append to today's log. If None, returns current content.
+    """
+    today = _today()
+    slug = f"log-{today}"
+    path = WIKI_DIR / f"{slug}.md"
+
+    if not path.exists():
+        content = (
+            f"## Research Log — {today}\n\n"
+            f"*(Daily anchor for insights, captures, and decisions)*\n\n"
+            f"### Session Notes\n\n"
+        )
+        page = _build_page(slug, f"Research Log {today}", content,
+                           tags=["log", "daily"], source="wiki_daily",
+                           note_type="daily")
+        path.write_text(page, encoding="utf-8")
+        _append_log(f"Created daily log: `{slug}`")
+
+    if entry is None:
+        return path.read_text(encoding="utf-8")
+
+    # Append entry with timestamp
+    current = path.read_text(encoding="utf-8")
+    meta, body = _parse_frontmatter(current)
+    meta["updated"] = _now()
+    timestamp = datetime.now().strftime("%H:%M")
+    body = body.rstrip() + f"\n- **{timestamp}** — {entry.strip()}\n"
+    fm = yaml.dump(meta, allow_unicode=True, default_flow_style=False).strip()
+    path.write_text(f"---\n{fm}\n---\n\n{body.strip()}\n", encoding="utf-8")
+    _append_log(f"Appended to daily log: `{slug}`")
+    return f"✓ Added to {slug}.md: {entry[:80]}"
 
 
 # ---------------------------------------------------------------------------
