@@ -29,25 +29,27 @@ except ImportError:
 import os
 _vault_override = os.environ.get("VAULT_ROOT")
 VAULT_ROOT = Path(_vault_override) if _vault_override else Path(__file__).parent.parent / "vault"
-WIKI_DIR = VAULT_ROOT / "wiki"       # legacy fallback folder
+WIKI_DIR = VAULT_ROOT / "wiki"       # compiled knowledge root
 RAW_DIR = VAULT_ROOT / "raw"
-PAPERS_DIR = VAULT_ROOT / "papers"
+PAPERS_DIR = VAULT_ROOT / "wiki" / "03-sources"
 LOG_FILE = VAULT_ROOT / "log.md"
 INDEX_FILE = VAULT_ROOT / "_index.md"
 LINT_FILE = VAULT_ROOT / "_lint-report.md"
 
-# Note type → numbered folder mapping
+# Note type → numbered folder mapping (Karpathy 3-folder pattern)
+# All compiled knowledge lives under wiki/<subfolder>
 TYPE_FOLDERS: dict[str, str] = {
-    "daily": "01-daily",
-    "project": "02-projects",
-    "concept": "03-concepts",
-    "strategy": "04-strategies",
-    "source": "05-sources",
-    "entity": "06-entities",
-    "idea": "07-ideas",
-    "decision": "08-decisions",
-    "log": "09-logs",
-    "kaizen": "10-kaizen",
+    "daily":    "wiki/01-daily",
+    "concept":  "wiki/02-concepts",
+    "source":   "wiki/03-sources",
+    "note":     "wiki/04-notes",
+    "strategy": "wiki/04-notes",
+    "entity":   "wiki/04-notes",
+    "project":  "wiki/05-projects",
+    "idea":     "wiki/05-projects",
+    "decision": "wiki/05-projects",
+    "log":      "wiki/05-projects",
+    "kaizen":   "wiki/05-projects",
 }
 
 for d in (WIKI_DIR, RAW_DIR, PAPERS_DIR):
@@ -471,7 +473,7 @@ def wiki_log(lines: int = 10) -> str:
 # Inbox / capture tools
 # ---------------------------------------------------------------------------
 
-INBOX_DIR = VAULT_ROOT / "inbox"
+INBOX_DIR = VAULT_ROOT / "wiki" / "04-notes"
 INBOX_DIR.mkdir(parents=True, exist_ok=True)
 
 

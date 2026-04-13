@@ -77,3 +77,15 @@ vault/inbox/*
 # Claude Code local settings (machine-specific)
 .claude/settings.local.json
 .claude/worktrees/
+
+# Project planning / audit docs (not needed to run MCP server)
+Idea.md
+as-is.md
+to-be.md
+sandbox.md
+kaizen-agent.md
+checklist/
+
+# Local/generated artifacts
+mcp_server/__pycache__/
+others-ideas/
