@@ -30,7 +30,7 @@ Bạn là **Wiki Compiler Agent**. Nhiệm vụ của bạn là xây dựng, mai
                        ▼
          ┌─────────────────────────┐
          │         Obsidian Vault          │
-         │  inbox/  raw/  wiki/  papers/  │
+         │  raw/  wiki/  outputs/         │
          └─────────────────────────────────┘
                        ↑ UI
                  Obsidian App
@@ -55,26 +55,21 @@ git clone https://github.com/kepano/obsidian-skills.git ~/.claude/skills/obsidia
 
 ## Vault Structure
 
+Karpathy 3-folder pattern:
+
 ```
 vault/
-├── inbox/                 # Quick-capture buffer — chưa processed
-│   └── <timestamp>-<slug>.md
 ├── raw/                   # Nguồn gốc — KHÔNG chỉnh sửa, chỉ thêm
 │   └── *.md / *.txt / *.pdf
-├── 01-daily/              # Daily research logs (type: daily)
-│   └── log-<date>.md
-├── 02-projects/           # Project tracking (type: project)
-├── 03-concepts/           # Technical concepts (type: concept)
-├── 04-strategies/         # Trading strategies (type: strategy)
-├── 05-sources/            # Source summaries — articles, books (type: source)
-├── 06-entities/           # People, orgs, products (type: entity)
-├── 07-ideas/              # Brain dumps, explorations (type: idea)
-├── 08-decisions/          # Decision records (type: decision)
-├── 09-logs/               # Conversation captures (type: log)
-├── 10-kaizen/             # System improvement notes (type: kaizen)
-├── papers/                # Arxiv papers fetched via arxiv_fetch_paper
-│   └── paper-<arxiv-id>.md
-├── wiki/                  # Legacy fallback (type: note / unclassified)
+├── wiki/                  # Compiled knowledge — toàn bộ nội dung đã xử lý
+│   ├── 01-daily/          # Daily research logs (type: daily)
+│   │   └── log-<date>.md
+│   ├── 02-concepts/       # Technical concepts (type: concept)
+│   ├── 03-sources/        # Source summaries + Arxiv papers (type: source)
+│   │   └── paper-<arxiv-id>.md
+│   ├── 04-notes/          # General notes, strategies, entities (type: note/strategy/entity)
+│   └── 05-projects/       # Projects, ideas, decisions, logs, kaizen (type: project/idea/decision/log/kaizen)
+├── outputs/               # AI-generated answers, reports, one-off outputs
 ├── _index.md              # Auto-generated catalog (vault root)
 ├── _lint-report.md        # Auto-generated health check (vault root)
 └── log.md                 # Append-only activity log
@@ -82,11 +77,9 @@ vault/
 
 **Routing logic:** `wiki_write` tự động route file vào đúng folder dựa trên `type` field (hoặc slug prefix). `wiki_read/update/delete` tìm file across tất cả folders.
 
-**Migration:** Chạy `wiki_migrate_folders()` một lần để move files cũ từ `wiki/` sang đúng typed folders.
-
 **Quy tắc cứng:**
 - `raw/` là immutable. Chỉ dùng `wiki_ingest_raw` để thêm vào đây, không bao giờ xoá.
-- `inbox/` là triage buffer — dùng `wiki_capture` để thêm, `wiki_process_inbox` để process.
+- `wiki/04-notes/` là capture buffer — dùng `wiki_capture` để quick-capture.
 - Tất cả wiki pages đều có frontmatter YAML (do `wiki_write` tự tạo).
 - Frontmatter phải có `type` field (auto-derived từ slug prefix nếu không explicit).
 - Mọi page phải có ít nhất 1 `[[wiki link]]` đến page khác — không có orphan.
@@ -99,30 +92,30 @@ vault/
 ### Slugs
 - Dùng kebab-case: `momentum-trading`, `ernies-chan-mean-reversion`
 - Prefix theo loại:
-  - `source-*` — summary của 1 nguồn cụ thể (paper, article, book chapter)
-  - `concept-*` — khái niệm kỹ thuật / lý thuyết
-  - `entity-*` — người, tổ chức, sản phẩm
-  - `strategy-*` — trading strategy cụ thể → `04-strategies/`
-  - `log-*` — captured từ conversation hoặc daily anchor → `09-logs/`
-  - `decision-*` — research decision log (tại sao chọn approach X, bỏ Y) → `08-decisions/`
-  - `project-*` — project tracking → `02-projects/`
-  - `idea-*` — brain dump, exploration → `07-ideas/`
-  - `kaizen-*` — system improvement → `10-kaizen/`
+  - `source-*` — summary của 1 nguồn cụ thể (paper, article, book chapter) → `wiki/03-sources/`
+  - `concept-*` — khái niệm kỹ thuật / lý thuyết → `wiki/02-concepts/`
+  - `entity-*` — người, tổ chức, sản phẩm → `wiki/04-notes/`
+  - `strategy-*` — trading strategy cụ thể → `wiki/04-notes/`
+  - `log-*` — captured từ conversation hoặc daily anchor → `wiki/05-projects/`
+  - `decision-*` — research decision log → `wiki/05-projects/`
+  - `project-*` — project tracking → `wiki/05-projects/`
+  - `idea-*` — brain dump, exploration → `wiki/05-projects/`
+  - `kaizen-*` — system improvement → `wiki/05-projects/`
 
 ### Type → Folder mapping
 | type | folder | slug prefix |
 |------|--------|-------------|
-| daily | 01-daily/ | log-YYYY-MM-DD |
-| project | 02-projects/ | project-* |
-| concept | 03-concepts/ | concept-* |
-| strategy | 04-strategies/ | strategy-* |
-| source | 05-sources/ | source-* |
-| entity | 06-entities/ | entity-* |
-| idea | 07-ideas/ | idea-* |
-| decision | 08-decisions/ | decision-* |
-| log | 09-logs/ | log-* |
-| kaizen | 10-kaizen/ | kaizen-* |
-| note | wiki/ | (fallback) |
+| daily | wiki/01-daily/ | log-YYYY-MM-DD |
+| concept | wiki/02-concepts/ | concept-* |
+| source | wiki/03-sources/ | source-*, paper-* |
+| note | wiki/04-notes/ | (fallback) |
+| strategy | wiki/04-notes/ | strategy-* |
+| entity | wiki/04-notes/ | entity-* |
+| project | wiki/05-projects/ | project-* |
+| idea | wiki/05-projects/ | idea-* |
+| decision | wiki/05-projects/ | decision-* |
+| log | wiki/05-projects/ | log-* |
+| kaizen | wiki/05-projects/ | kaizen-* |
 
 ### Tags chuẩn
 ```
