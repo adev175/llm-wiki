@@ -49,17 +49,17 @@ Notes are automatically routed to a typed subfolder based on their `type` field:
 
 | Type | Folder | Slug prefix | What it stores |
 |------|--------|-------------|----------------|
-| concept | `03-concepts/` | `concept-` | A technical idea or theory — definition, how it works, edge cases |
-| strategy | `04-strategies/` | `strategy-` | A trading strategy — setup, signals, risk rules, empirical notes |
-| source | `05-sources/` | `source-` | Summary of a book, paper, or article — key claims, quotes, context |
-| entity | `06-entities/` | `entity-` | A person, firm, or tool — background, notable work, opinions |
-| project | `02-projects/` | `project-` | Project plans, tracking, milestones |
-| idea | `07-ideas/` | `idea-` | Brain dumps, explorations |
-| decision | `08-decisions/` | `decision-` | Why you chose approach X over Y — alternatives considered, reversibility |
-| log | `09-logs/` | `log-` | Captured conversation insight |
-| daily | `01-daily/` | `log-YYYY-MM-DD` | Daily research anchor note |
-| kaizen | `10-kaizen/` | `kaizen-` | System improvement notes |
-| paper | `papers/` | `paper-` | Arxiv paper — abstract, methods, results, links to related concepts |
+| daily | `wiki/01-daily/` | `log-YYYY-MM-DD` | Daily research anchor note |
+| concept | `wiki/02-concepts/` | `concept-` | A technical idea or theory — definition, how it works, edge cases |
+| source | `wiki/03-sources/` | `source-`, `paper-` | Summary of a book, paper, or article — key claims, quotes, context; also Arxiv papers |
+| note | `wiki/04-notes/` | (fallback) | General notes, quick captures |
+| strategy | `wiki/04-notes/` | `strategy-` | A trading strategy — setup, signals, risk rules, empirical notes |
+| entity | `wiki/04-notes/` | `entity-` | A person, firm, or tool — background, notable work, opinions |
+| project | `wiki/05-projects/` | `project-` | Project plans, tracking, milestones |
+| idea | `wiki/05-projects/` | `idea-` | Brain dumps, explorations |
+| decision | `wiki/05-projects/` | `decision-` | Why you chose approach X over Y — alternatives considered, reversibility |
+| log | `wiki/05-projects/` | `log-` | Captured conversation insight |
+| kaizen | `wiki/05-projects/` | `kaizen-` | System improvement notes |
 
 ### Synonym-aware search
 
@@ -73,15 +73,15 @@ Searching for any of these terms finds the page — even if the query term never
 
 ### Inbox for quick capture
 
-Don't want to think about where something belongs right now? Claude drops it in `vault/inbox/` with a timestamp. You can process it later, or ask Claude to sort through the inbox for you.
+Don't want to think about where something belongs right now? Claude drops it in `vault/wiki/04-notes/` with a timestamp prefix and `status: inbox` in frontmatter. You can process it later, or ask Claude to sort through the inbox for you.
 
 ### Daily research log
 
-Every session can anchor to today's date via `vault/01-daily/log-YYYY-MM-DD.md`. Useful for tracking what you read, what questions came up, and what decisions were made on a given day.
+Every session can anchor to today's date via `vault/wiki/01-daily/log-YYYY-MM-DD.md`. Useful for tracking what you read, what questions came up, and what decisions were made on a given day.
 
 ### Arxiv integration
 
-Claude can search Arxiv by topic and fetch full paper metadata in one step. Papers are saved to `vault/papers/` and automatically linked to related concept pages.
+Claude can search Arxiv by topic and fetch full paper metadata in one step. Papers are saved to `vault/wiki/03-sources/` (as `paper-<arxiv-id>.md`) and automatically linked to related concept pages.
 
 ### Auto-timestamp hook
 
@@ -103,7 +103,7 @@ Once set up, the index rebuilds automatically after each Claude session.
 ### Vault health check
 
 ```bash
-python hooks/validate-frontmatter.py vault/
+python hooks/validate-frontmatter.py vault/wiki
 ```
 
 Checks all pages across all typed folders for missing required fields, invalid types, malformed slugs, and non-list aliases.
@@ -114,22 +114,16 @@ Checks all pages across all typed folders for missing required fields, invalid t
 
 ```
 vault/
-├── inbox/          # Unprocessed quick-captures
-├── raw/            # Original source text — never edited
-├── 01-daily/       # Daily research logs
-├── 02-projects/    # Project tracking
-├── 03-concepts/    # Technical concepts
-├── 04-strategies/  # Trading strategies
-├── 05-sources/     # Book / article / paper summaries
-├── 06-entities/    # People, orgs, tools
-├── 07-ideas/       # Brain dumps
-├── 08-decisions/   # Decision records
-├── 09-logs/        # Conversation captures
-├── 10-kaizen/      # System improvement notes
-├── papers/         # Arxiv papers
-├── wiki/           # Legacy / unclassified fallback
-├── _index.md       # Auto-generated catalog
-└── log.md          # Activity history
+├── raw/                   # Original source text — never edited
+├── wiki/                  # All compiled knowledge
+│   ├── 01-daily/          # Daily research logs
+│   ├── 02-concepts/       # Technical concepts
+│   ├── 03-sources/        # Book / article / paper summaries + Arxiv papers
+│   ├── 04-notes/          # General notes, strategies, entities, quick-captures
+│   └── 05-projects/       # Projects, ideas, decisions, logs, kaizen
+├── outputs/               # AI-generated answers and one-off reports
+├── _index.md              # Auto-generated catalog
+└── log.md                 # Activity history
 ```
 
 > **Migration:** If upgrading from an older version with a flat `vault/wiki/`, run `wiki_migrate_folders()` once to move existing files into the correct typed subfolders.
