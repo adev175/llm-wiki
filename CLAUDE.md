@@ -358,6 +358,8 @@ Khi tạo page mới về trading:
 | `arxiv_search` | Tìm papers Arxiv theo query |
 | `arxiv_fetch_paper` | Lấy full metadata + save vào `papers/` |
 | `knowledge_search` | Auto-search Arxiv, validate, save wiki nếu useful |
+| `image_capture` | Save base64 image → `vault/attachments/<slug>/` + trả Obsidian embed link |
+| `pdf_extract_images` | Rip toàn bộ figures từ PDF → `vault/attachments/<slug>/` + trả embed links |
 
 ### kepano/obsidian-skills — cần Obsidian mở (trừ defuddle)
 
