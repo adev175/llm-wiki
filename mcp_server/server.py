@@ -5,6 +5,7 @@ Implements wiki_*, arxiv_*, and knowledge_search tools for the LLM Wiki vault.
 Configure in Claude Desktop via claude_desktop_config.json.
 """
 
+import base64
 import json
 import re
 import sys
@@ -15,6 +16,12 @@ from pathlib import Path
 import httpx
 import yaml
 from mcp.server.fastmcp import FastMCP
+
+try:
+    import fitz  # PyMuPDF
+    _PYMUPDF_AVAILABLE = True
+except ImportError:
+    _PYMUPDF_AVAILABLE = False
 
 # Load .env if present (python-dotenv optional)
 try:
@@ -29,15 +36,36 @@ except ImportError:
 import os
 _vault_override = os.environ.get("VAULT_ROOT")
 VAULT_ROOT = Path(_vault_override) if _vault_override else Path(__file__).parent.parent / "vault"
-WIKI_DIR = VAULT_ROOT / "wiki"
+WIKI_DIR = VAULT_ROOT / "wiki"       # compiled knowledge root
 RAW_DIR = VAULT_ROOT / "raw"
-PAPERS_DIR = VAULT_ROOT / "papers"
+PAPERS_DIR = VAULT_ROOT / "wiki" / "03-sources"
+ATTACHMENTS_DIR = VAULT_ROOT / "attachments"
 LOG_FILE = VAULT_ROOT / "log.md"
-INDEX_FILE = WIKI_DIR / "_index.md"
-LINT_FILE = WIKI_DIR / "_lint-report.md"
+INDEX_FILE = VAULT_ROOT / "_index.md"
+LINT_FILE = VAULT_ROOT / "_lint-report.md"
 
-for d in (WIKI_DIR, RAW_DIR, PAPERS_DIR):
+# Note type → numbered folder mapping (Karpathy 3-folder pattern)
+# All compiled knowledge lives under wiki/<subfolder>
+TYPE_FOLDERS: dict[str, str] = {
+    "daily":    "wiki/01-daily",
+    "concept":  "wiki/02-concepts",
+    "source":   "wiki/03-sources",
+    "note":     "wiki/04-notes",
+    "strategy": "wiki/04-notes",
+    "entity":   "wiki/04-notes",
+    "project":  "wiki/05-projects",
+    "idea":     "wiki/05-projects",
+    "decision": "wiki/05-projects",
+    "log":      "wiki/05-projects",
+    "kaizen":   "wiki/05-projects",
+}
+
+for d in (WIKI_DIR, RAW_DIR, PAPERS_DIR, ATTACHMENTS_DIR):
     d.mkdir(parents=True, exist_ok=True)
+
+# Pre-create all typed folders
+for _folder in TYPE_FOLDERS.values():
+    (VAULT_ROOT / _folder).mkdir(parents=True, exist_ok=True)
 
 mcp = FastMCP("llm-wiki")
 
@@ -87,11 +115,33 @@ def _slug_to_type(slug: str) -> str:
         "paper-": "paper",
         "decision-": "decision",
         "kaizen-": "kaizen",
+        "project-": "project",
+        "idea-": "idea",
+        "daily-": "daily",
     }
     for prefix, t in prefix_map.items():
         if slug.startswith(prefix):
             return t
     return "note"
+
+
+def _type_to_dir(note_type: str) -> Path:
+    """Return the vault subfolder Path for a given note type, creating it if needed."""
+    folder = TYPE_FOLDERS.get(note_type, "wiki")
+    d = VAULT_ROOT / folder
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _find_page(slug: str) -> Path | None:
+    """Find an existing page by slug across all typed folders + legacy wiki/ fallback."""
+    candidates = [VAULT_ROOT / folder for folder in TYPE_FOLDERS.values()]
+    candidates.append(WIKI_DIR)
+    for d in candidates:
+        p = d / f"{slug}.md"
+        if p.exists():
+            return p
+    return None
 
 
 def _build_page(slug: str, title: str, content: str, tags: list[str],
@@ -115,7 +165,14 @@ def _build_page(slug: str, title: str, content: str, tags: list[str],
 
 
 def _all_wiki_pages() -> list[Path]:
-    return [p for p in WIKI_DIR.glob("*.md") if not p.name.startswith("_")]
+    """Return all wiki pages across all typed folders + legacy wiki/ fallback."""
+    search_dirs = [VAULT_ROOT / folder for folder in TYPE_FOLDERS.values()]
+    search_dirs.append(WIKI_DIR)
+    pages = []
+    for d in search_dirs:
+        if d.exists():
+            pages.extend(p for p in d.glob("*.md") if not p.name.startswith("_"))
+    return pages
 
 
 def _extract_wikilinks(text: str) -> list[str]:
@@ -142,14 +199,21 @@ def wiki_write(slug: str, title: str, content: str,
         note_type: Explicit type override (auto-derived from slug prefix if omitted)
         aliases: Alternative names for search disambiguation, e.g. ['mean reversion', 'stat arb']
     """
-    path = WIKI_DIR / f"{slug}.md"
+    resolved_type = note_type or _slug_to_type(slug)
+    # Check if page already exists in any folder (to support updates via wiki_write)
+    existing = _find_page(slug)
+    if existing:
+        path = existing
+    else:
+        path = _type_to_dir(resolved_type) / f"{slug}.md"
     existed = path.exists()
     page = _build_page(slug, title, content, tags or [], source,
-                       note_type=note_type, aliases=aliases)
+                       note_type=resolved_type, aliases=aliases)
     path.write_text(page, encoding="utf-8")
     action = "Updated" if existed else "Created"
-    _append_log(f"{action} wiki page: `{slug}`")
-    return f"✓ {action}: {slug}.md"
+    folder = path.parent.name
+    _append_log(f"{action} wiki page: `{slug}` → {folder}/")
+    return f"✓ {action}: {folder}/{slug}.md"
 
 
 @mcp.tool()
@@ -163,8 +227,8 @@ def wiki_update(slug: str, new_content: str, source: str = "manual",
         source: Origin of this update
         mode: 'append' to add section, 'merge' to synthesize (default)
     """
-    path = WIKI_DIR / f"{slug}.md"
-    if not path.exists():
+    path = _find_page(slug)
+    if path is None:
         return f"✗ Not found: {slug}.md — use wiki_write to create it first."
     meta, body = _parse_frontmatter(path.read_text(encoding="utf-8"))
     meta["updated"] = _now()
@@ -190,8 +254,8 @@ def wiki_read(slug: str) -> str:
     Args:
         slug: Page slug, e.g. 'concept-momentum-trading'
     """
-    path = WIKI_DIR / f"{slug}.md"
-    if not path.exists():
+    path = _find_page(slug)
+    if path is None:
         return f"✗ Not found: {slug}.md"
     return path.read_text(encoding="utf-8")
 
@@ -203,12 +267,13 @@ def wiki_delete(slug: str) -> str:
     Args:
         slug: Page slug to delete
     """
-    path = WIKI_DIR / f"{slug}.md"
-    if not path.exists():
+    path = _find_page(slug)
+    if path is None:
         return f"✗ Not found: {slug}.md"
+    folder = path.parent.name
     path.unlink()
-    _append_log(f"Deleted wiki page: `{slug}`")
-    return f"✓ Deleted: {slug}.md"
+    _append_log(f"Deleted wiki page: `{slug}` from {folder}/")
+    return f"✓ Deleted: {folder}/{slug}.md"
 
 
 @mcp.tool()
@@ -416,7 +481,7 @@ def wiki_log(lines: int = 10) -> str:
 # Inbox / capture tools
 # ---------------------------------------------------------------------------
 
-INBOX_DIR = VAULT_ROOT / "inbox"
+INBOX_DIR = VAULT_ROOT / "wiki" / "04-notes"
 INBOX_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -469,8 +534,44 @@ def wiki_list_inbox() -> str:
 
 
 @mcp.tool()
+def wiki_migrate_folders() -> str:
+    """Migrate flat vault/wiki/ files to typed subfolders based on slug prefix / frontmatter type.
+    Safe to run multiple times — skips files that are already in the correct location.
+    """
+    legacy_files = [p for p in WIKI_DIR.glob("*.md") if not p.name.startswith("_")]
+    if not legacy_files:
+        return "✓ Nothing to migrate — vault/wiki/ is already empty."
+
+    moved, skipped = [], []
+    for p in legacy_files:
+        try:
+            meta, _ = _parse_frontmatter(p.read_text(encoding="utf-8"))
+            note_type = meta.get("type") or _slug_to_type(p.stem)
+            dest_dir = _type_to_dir(note_type)
+            dest = dest_dir / p.name
+            if dest == p:
+                skipped.append(p.name)
+                continue
+            if dest.exists():
+                skipped.append(f"{p.name} (conflict in {dest_dir.name}/)")
+                continue
+            p.rename(dest)
+            moved.append(f"{p.name} → {dest_dir.name}/")
+        except Exception as e:
+            skipped.append(f"{p.name} (error: {e})")
+
+    _append_log(f"Migrated {len(moved)} wiki files to typed folders")
+    lines = [f"**Migration complete** — {len(moved)} moved, {len(skipped)} skipped\n"]
+    if moved:
+        lines += ["### Moved"] + [f"- {m}" for m in moved]
+    if skipped:
+        lines += ["### Skipped"] + [f"- {s}" for s in skipped]
+    return "\n".join(lines)
+
+
+@mcp.tool()
 def wiki_daily(entry: str | None = None) -> str:
-    """Read or append to today's daily research log (vault/wiki/log-<date>.md).
+    """Read or append to today's daily research log (01-daily/log-<date>.md).
     If the daily note doesn't exist, creates it.
 
     Args:
@@ -478,7 +579,8 @@ def wiki_daily(entry: str | None = None) -> str:
     """
     today = _today()
     slug = f"log-{today}"
-    path = WIKI_DIR / f"{slug}.md"
+    # Check both new daily folder and legacy locations
+    path = _find_page(slug) or (_type_to_dir("daily") / f"{slug}.md")
 
     if not path.exists():
         content = (
@@ -505,6 +607,155 @@ def wiki_daily(entry: str | None = None) -> str:
     path.write_text(f"---\n{fm}\n---\n\n{body.strip()}\n", encoding="utf-8")
     _append_log(f"Appended to daily log: `{slug}`")
     return f"✓ Added to {slug}.md: {entry[:80]}"
+
+
+# ---------------------------------------------------------------------------
+# Image capture tools
+# ---------------------------------------------------------------------------
+
+def _attachment_path(source_slug: str, filename: str) -> Path:
+    """Return the full path for an attachment, creating the parent dir."""
+    if source_slug:
+        safe_slug = re.sub(r"[^a-z0-9_\-]", "-", source_slug.lower())
+        dest = ATTACHMENTS_DIR / safe_slug / filename
+    else:
+        dest = ATTACHMENTS_DIR / filename
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    return dest
+
+
+def _obsidian_embed(source_slug: str, filename: str, caption: str = "") -> str:
+    """Return an Obsidian wikilink embed string for an image."""
+    if source_slug:
+        safe_slug = re.sub(r"[^a-z0-9_\-]", "-", source_slug.lower())
+        rel = f"attachments/{safe_slug}/{filename}"
+    else:
+        rel = f"attachments/{filename}"
+    if caption:
+        return f"![[{rel}|{caption}]]"
+    return f"![[{rel}]]"
+
+
+@mcp.tool()
+def image_capture(
+    image_data_b64: str,
+    filename: str,
+    source_slug: str = "",
+    caption: str = "",
+) -> str:
+    """Save a base64-encoded image to vault/attachments/ and return an Obsidian embed link.
+    Use when you have an image (from a PDF figure, screenshot, or chart) to persist in the vault.
+
+    Args:
+        image_data_b64: Base64-encoded image bytes (PNG, JPEG, WebP, etc.)
+        filename: Desired filename, e.g. 'figure1.png'. Must include extension.
+        source_slug: Wiki slug this image belongs to — creates a subfolder for organisation,
+                     e.g. 'paper-2401-12345'. Leave empty for unsorted attachments.
+        caption: Optional display caption used inside the Obsidian embed.
+    """
+    try:
+        raw = base64.b64decode(image_data_b64)
+    except Exception as e:
+        return f"✗ Failed to decode image: {e}"
+
+    safe_filename = re.sub(r"[^a-zA-Z0-9._\-]", "-", filename)
+    dest = _attachment_path(source_slug, safe_filename)
+    dest.write_bytes(raw)
+
+    embed = _obsidian_embed(source_slug, safe_filename, caption)
+    rel = str(dest.relative_to(VAULT_ROOT)).replace("\\", "/")
+    _append_log(f"Captured image: `{rel}` ({len(raw):,} bytes)")
+    return f"✓ Saved: {rel}\n\nObsidian embed:\n```\n{embed}\n```"
+
+
+@mcp.tool()
+def pdf_extract_images(
+    pdf_path: str,
+    source_slug: str,
+    min_width: int = 100,
+    min_height: int = 100,
+    page_range: str = "",
+) -> str:
+    """Extract all embedded images from a PDF and save them to vault/attachments/<source_slug>/.
+    Returns a markdown block with Obsidian embed links ready to paste into a wiki page.
+    Requires: pymupdf (pip install pymupdf).
+
+    Args:
+        pdf_path: Absolute path to the PDF file on disk.
+        source_slug: Wiki slug to organise images under, e.g. 'paper-2401-12345'.
+        min_width: Skip images narrower than this many pixels (default 100).
+        min_height: Skip images shorter than this many pixels (default 100).
+        page_range: Optional page subset, e.g. '1-5' or '3,7,12'. Empty = all pages.
+    """
+    if not _PYMUPDF_AVAILABLE:
+        return (
+            "✗ PyMuPDF not installed. Run:\n"
+            "  pip install pymupdf\n"
+            "then restart the MCP server."
+        )
+
+    pdf_file = Path(pdf_path)
+    if not pdf_file.exists():
+        return f"✗ PDF not found: {pdf_path}"
+
+    # Parse page_range
+    target_pages: set[int] | None = None
+    if page_range.strip():
+        target_pages = set()
+        for part in page_range.split(","):
+            part = part.strip()
+            if "-" in part:
+                a, b = part.split("-", 1)
+                target_pages.update(range(int(a) - 1, int(b)))  # 0-indexed
+            else:
+                target_pages.add(int(part) - 1)
+
+    doc = fitz.open(str(pdf_file))
+    saved: list[tuple[int, int, str]] = []  # (page_no, fig_no, filename)
+    skipped = 0
+
+    for page_idx in range(len(doc)):
+        if target_pages is not None and page_idx not in target_pages:
+            continue
+        page = doc[page_idx]
+        image_list = page.get_images(full=True)
+        fig_on_page = 0
+        for img_info in image_list:
+            xref = img_info[0]
+            base_img = doc.extract_image(xref)
+            w, h = base_img["width"], base_img["height"]
+            if w < min_width or h < min_height:
+                skipped += 1
+                continue
+            ext = base_img["ext"]  # e.g. 'png', 'jpeg'
+            fig_on_page += 1
+            fname = f"page-{page_idx + 1:03d}-fig-{fig_on_page:02d}.{ext}"
+            dest = _attachment_path(source_slug, fname)
+            dest.write_bytes(base_img["image"])
+            saved.append((page_idx + 1, fig_on_page, fname))
+
+    doc.close()
+
+    if not saved:
+        return (
+            f"✗ No images found in {pdf_file.name} "
+            f"(min size: {min_width}×{min_height}px, skipped {skipped} tiny images)."
+        )
+
+    lines = [
+        f"✓ Extracted **{len(saved)} image(s)** from `{pdf_file.name}` "
+        f"(skipped {skipped} tiny) → `attachments/{source_slug}/`\n",
+        "## Obsidian Embeds\n",
+        "Paste into your wiki page:\n",
+    ]
+    for page_no, fig_no, fname in saved:
+        embed = _obsidian_embed(source_slug, fname, f"Figure {fig_no} (p.{page_no})")
+        lines.append(embed)
+
+    _append_log(
+        f"Extracted {len(saved)} images from PDF `{pdf_file.name}` → attachments/{source_slug}/"
+    )
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

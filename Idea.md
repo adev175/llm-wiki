@@ -1,1 +1,0 @@
-Mục tiêu là khi dùng Claude Desktop hoặc Claude.ai thì các knowledge trôi nổi trong đó sẽ được lưu vào kho kiến thức llm-wiki dưới dạng obsidian vault. Liên tục update, kiểm tra, chỉnh sửa để keep wiki này healthy. Dựa trên ý tưởng llm-wiki của Karpathy và các skills/MCP của Kepano liên quan tới Obsidian.

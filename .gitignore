@@ -32,20 +32,60 @@ desktop.ini
 # Obsidian app settings
 vault/.obsidian/
 
-# Keep vault folder structure but ignore all content
-vault/raw/*
-vault/wiki/*
-vault/papers/*
+# Vault content — knowledge data, not code
+# Flat content files
 vault/log.md
+vault/_index.md
+vault/_lint-report.md
+
+# Raw sources (immutable store)
+vault/raw/*
 !vault/raw/.gitkeep
-!vault/wiki/.gitkeep
+
+# Papers
+vault/papers/*
 !vault/papers/.gitkeep
 
-# Claude Code local settings (machine-specific, keep settings.json for shared rules)
-.claude/settings.local.json
+# Typed knowledge folders (all content)
+vault/01-daily/*
+vault/02-projects/*
+vault/03-concepts/*
+vault/04-strategies/*
+vault/05-sources/*
+vault/06-entities/*
+vault/07-ideas/*
+vault/08-decisions/*
+vault/09-logs/*
+vault/10-kaizen/*
+vault/wiki/*
+!vault/01-daily/.gitkeep
+!vault/02-projects/.gitkeep
+!vault/03-concepts/.gitkeep
+!vault/04-strategies/.gitkeep
+!vault/05-sources/.gitkeep
+!vault/06-entities/.gitkeep
+!vault/07-ideas/.gitkeep
+!vault/08-decisions/.gitkeep
+!vault/09-logs/.gitkeep
+!vault/10-kaizen/.gitkeep
+!vault/wiki/.gitkeep
 
-# Vault content — knowledge data, not code
-vault/raw/
-vault/wiki/
-vault/papers/
-vault/log.md
+# Inbox (transient)
+vault/inbox/*
+!vault/inbox/.gitkeep
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Project planning / audit docs (not needed to run MCP server)
+Idea.md
+as-is.md
+to-be.md
+sandbox.md
+kaizen-agent.md
+checklist/
+
+# Local/generated artifacts
+mcp_server/__pycache__/
+others-ideas/
